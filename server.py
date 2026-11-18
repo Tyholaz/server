@@ -5,12 +5,7 @@ import os
 import uvicorn
 
 app = FastAPI()
-
-# База даних (у пам'яті)
-users_db = {
-    "admin": "123"  # Логін: admin, Пароль: 123
-}
-
+users_db = {"admin": "123"}
 active_connections: Dict[str, WebSocket] = {}
 
 @app.websocket("/ws")
@@ -27,7 +22,6 @@ async def websocket_endpoint(websocket: WebSocket):
             if msg_type == "LOGIN":
                 username = message.get("username")
                 password = message.get("password")
-                
                 if username in users_db and users_db[username] == password:
                     current_user = username
                     active_connections[username] = websocket
@@ -39,25 +33,25 @@ async def websocket_endpoint(websocket: WebSocket):
             elif msg_type == "REGISTER":
                 username = message.get("username")
                 password = message.get("password")
-                
                 if username in users_db:
                     await websocket.send_text(json.dumps({"type": "AUTH_ERROR", "message": "Такий логін вже існує"}))
-                elif not username or not password:
-                    await websocket.send_text(json.dumps({"type": "AUTH_ERROR", "message": "Логін та пароль не можуть бути порожніми"}))
                 else:
                     users_db[username] = password
-                    await websocket.send_text(json.dumps({"type": "REG_SUCCESS", "message": "Реєстрація успішна! Тепер увійдіть."}))
+                    await websocket.send_text(json.dumps({"type": "REG_SUCCESS", "message": "Реєстрація успішна!"}))
 
             elif current_user:
-                if msg_type == "PRANK":
-                    target_user = message.get("target")
-                    if target_user in active_connections:
-                        await active_connections[target_user].send_text(json.dumps({"type": "DO_PRANK"}))
-                elif msg_type == "SCORE":
-                    await broadcast({"type": "SCORE_UPDATE", "username": current_user, "score": message["score"]})
+                # ПЕРЕСИЛАЄМО РУХИ БІТИ ТА ШАЙБИ
+                if msg_type in ["MOVE_PADDLE", "GAME_STATE"]:
+                    message["username"] = current_user
+                    await broadcast(message)
+                # ПРАНК
+                elif msg_type == "PRANK":
+                    target = message.get("target")
+                    if target in active_connections:
+                        await active_connections[target].send_text(json.dumps({"type": "DO_PRANK"}))
 
     except WebSocketDisconnect:
-        if current_user and current_user in active_connections:
+        if current_user in active_connections:
             del active_connections[current_user]
             await broadcast({"type": "PLAYER_LEFT", "username": current_user})
 
